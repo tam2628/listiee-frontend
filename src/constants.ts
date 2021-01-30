@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const
-SERVER_URL   = process.env.HOST || 'http://localhost:9000',
+SERVER_URL   = "https://listiee-backend.herokuapp.com" || 'http://localhost:9000',
 LOGIN_URL    = `${SERVER_URL}/user/login`,
 SIGNUP_URL   = `${SERVER_URL}/user/signup`,
 REFRESH_URL  = `${SERVER_URL}/user/refresh`,
