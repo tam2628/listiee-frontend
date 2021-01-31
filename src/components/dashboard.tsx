@@ -1,20 +1,22 @@
 import { useContext, useState, useEffect , useCallback, useLayoutEffect} from 'react';
 import { Container, Row, Col, Spinner, Card, Form, Button, Navbar, Nav } from 'react-bootstrap';
-import UserContext from "./../userContext";
-import { ALL_POST_URL } from './../constants';
+import UserContext from "../userContext";
+import { ALL_POST_URL } from '../constants';
 import convert from 'xml-js';
-import { POST_URL, LOGOUT_URL } from './../constants';
+import { POST_URL, LOGOUT_URL } from '../constants';
 import { useHistory } from 'react-router-dom';
 
 function Dashboard() {
     const {user, setUser} = useContext(UserContext);
     const [posts, setPosts] = useState<any>([]);
-    const [file, setFile] = useState<File|null>(null);
-    const [fileURL, setFileURL] = useState<string|undefined>(undefined);
-    const [postText, setPostText] = useState<string>("");
-    const [lat, setLat] = useState<number>(Infinity);
-    const [long, setLong] = useState<number>(Infinity);
-    const [submitting, setSubmitting] = useState<boolean>(false);
+    const [file, setFile] = useState(null);
+    const [fileURL, setFileURL] = useState(undefined);
+    const [postText, setPostText] = useState("");
+    const [lat, setLat] = useState(Infinity);
+    const [long, setLong] = useState(Infinity);
+    const [submitting, setSubmitting] = useState(false);
+    const [val, setVal] = useState("");
+    const [fetched, setFetched] = useState(false);
     const history = useHistory();
 
     const calculateDistance = (lat1:number, lon1:number, lat2:number, lon2:number) => {
@@ -54,12 +56,12 @@ function Dashboard() {
                         posts[i]['longitude']
                     );
                 }
-                posts.sort((a:any, b:any) => {
+                posts.sort((a:any , b:any) => {
                     return a.distance - b.distance;
                 });
-                posts.map((p:any) => console.log(p.distance))
             }
             setPosts(posts);
+            setFetched(true);
         })
        .catch(err => console.log(err));
     }, []);
@@ -68,7 +70,7 @@ function Dashboard() {
         if(file === null) return;
         const reader = new FileReader();
         reader.onload = (e:any) => setFileURL(e.target.result);
-        reader.readAsDataURL(file);
+        reader.readAsDataURL((file as unknown as Blob));
     }, [file]);
 
     function deg2rad(deg:number) {
@@ -84,36 +86,53 @@ function Dashboard() {
         const data = await res.text();
         const json = convert.xml2js(data);
         const d = (json.elements[0].elements[0]).elements;
-        const latt = d[0].elements[0].text;
-        const long = d[1].elements[0].text;
-        const formData = new FormData();
-        formData.append("image", file as Blob);
-        formData.append("latitude", latt);
-        formData.append("longitude", long);
-        formData.append("postText", postText);
+        const
+            latt = d[0].elements[0].text,
+            long = d[1].elements[0].text,
+            place = d[4].elements[0].text;
 
+        let uploadRes, fileRes;
         try{
+            //const fileName = new Date().toString()+user.id;
+            //uploadRes = await ReactS3Client.uploadFile(file, fileName);
+            //fileRes = await uploadRes.json();
+            const formData = new FormData();
+            formData.append("image", file as unknown as Blob);
+            formData.append("latitude", latt);
+            formData.append("longitude", long);
+            formData.append("postText", postText);
+            formData.append("country", place);
+
             res = await fetch(POST_URL, {
                 method: 'post',
                 credentials: 'include',
                 headers: {
-                    "Authorization": `Bearer ${user.accessToken}`
+                    "Authorization": `Bearer ${user.accessToken}`,
                 },
                 body: formData
+                // body: JSON.stringify({
+                //     image: uploadRes.location,
+                //     latitude: latt,
+                //     longitude: long,
+                //     postText,
+                // })
             });
             const post = await res.json();
             if(res.status === 201) {
                 post["distance"] = calculateDistance(lat, long, post.latitude, post.longitude);
                 setPosts([post, ...posts]);
                 setFile(null);
+                setFileURL(undefined);
                 setPostText("");
+                setVal("");
             }
-
-        }catch(err:any) {
+        } catch(err){
             console.log(err);
         }finally{
             setSubmitting(false);
         }
+
+
     }
 
     const logout = async (e:any) => {
@@ -129,7 +148,7 @@ function Dashboard() {
                 setUser(null);
                 history.push("/");
             }
-        }catch(err:any) {
+        }catch(err) {
             console.log(err);
         }
     }
@@ -158,10 +177,21 @@ function Dashboard() {
                         <Card.Body>
                             <Form onSubmit={submitPost}>
                                 <Form.Group>
-                                    <Form.Control as="textarea" rows={5} style={{resize:"none"}} value={postText} onChange={(e:any) => setPostText(e.target.value)} required={true}/>
+                                    <Form.Control   as="textarea"
+                                                    rows={5}
+                                                    style={{resize:"none"}}
+                                                    value={postText}
+                                                    onChange={(e) => setPostText(e.target.value)}
+                                                    required={true}/>
                                 </Form.Group>
                                     <Form.Group>
-                                        <Form.File id="imageFileInput" label="Upload Image 🖼" onChange={(e:any) => setFile(e.target.files[0])}/>
+                                        <Form.File  id="imageFileInput"
+                                                    value={val}
+                                                    label="Upload Image 🖼"
+                                                    onChange={(e:any) => {
+                                                        setVal(e.target.value)
+                                                        setFile(e.target.files[0])
+                                                    }}/>
                                     </Form.Group>
                                     {fileURL && <Card.Img variant="top" src={fileURL} style={{marginBottom:10}}></Card.Img>}
                                     <Button
@@ -180,8 +210,9 @@ function Dashboard() {
             <Row>
                 <Col lg={{span:6, offset:3}}>
                     {
-                        posts.length === 0 ?
+                        !fetched ?
                         <Spinner animation="grow"/> :
+                        posts.length === 0 ? <h3>No posts 😦</h3>:
                         posts.map((p:any, key:number) => {
                             return (
                                 <Card key={key}>

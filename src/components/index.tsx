@@ -1,4 +1,4 @@
-import { Button, Col, Container, Jumbotron, Row, Form } from "react-bootstrap";
+import { Button, Col, Container, Jumbotron, Row, Form, Alert } from "react-bootstrap";
 import { Link, useHistory } from 'react-router-dom';
 import { useState, useContext } from 'react';
 import { LOGIN_URL } from './../constants';
@@ -9,6 +9,7 @@ function Index () {
     const [email, setEmail] = useState<string>("");
     const [password, setPassword] = useState<string>("");
     const [submitting, setSubmitting] = useState<boolean>(false);
+    const [error, setError] = useState<string|null>(null);
     const {setUser} = useContext(UserContext);
     const history = useHistory();
 
@@ -28,12 +29,25 @@ function Index () {
                     password
                 })
             });
+
+            if(res.status === 404) {
+                setError("The user does not exist, please sign in");
+                return;
+            }
+
             const resp = await res.json();
+
+            if(res.status === 400){
+                setError(resp.msg);
+            }
 
             if(res.status === 200) {
                 setUser(resp);
                 history.push("/dash");
             }
+
+
+
         } catch(err:any) {
             console.log(err);
         } finally {
@@ -53,6 +67,13 @@ function Index () {
                     <Row style={{marginTop:20}}>
                         <Col lg={4}>
                             <h5>Login to the app</h5>
+                            {error &&
+                                <Alert variant="danger" onClose={() => setError(null)} dismissible>
+                                   <Alert.Heading>Oh snap! You got an error!</Alert.Heading>
+                                    <p>
+                                        {error}
+                                    </p>
+                                </Alert>}
                             <Form onSubmit={login}>
                             <Form.Group controlId="formBasicEmail">
                                 <Form.Label>Email address</Form.Label>
